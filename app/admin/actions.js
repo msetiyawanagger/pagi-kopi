@@ -4,6 +4,23 @@ import { redirect } from "next/navigation";
 import { buatKoneksiAdmin } from "@/lib/supabase/server";
 
 /**
+ * Memastikan admin sudah login di server sebelum menjalankan aksi yang mengubah data.
+ */
+export async function wajibAdmin() {
+  const supabase = await buatKoneksiAdmin();
+  const {
+    data: { user },
+    error,
+  } = await supabase.auth.getUser();
+
+  if (error || !user) {
+    throw new Error("Tidak diizinkan: kamu harus login sebagai admin.");
+  }
+
+  return { supabase, user };
+}
+
+/**
  * Server Action untuk memproses login admin menggunakan Supabase Auth.
  * Menerima FormData dari form login dan mengarahkan ke /admin jika berhasil.
  */
@@ -67,14 +84,12 @@ export async function gantiPassword(prevState, formData) {
     return { error: "Konfirmasi password tidak sama dengan password baru." };
   }
 
-  const supabase = await buatKoneksiAdmin();
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser();
-
-  if (authError || !user) {
-    return { error: "Kamu harus login terlebih dahulu untuk mengganti password." };
+  let supabase;
+  try {
+    const sesi = await wajibAdmin();
+    supabase = sesi.supabase;
+  } catch (err) {
+    return { error: err.message };
   }
 
   const { error } = await supabase.auth.updateUser({
